@@ -127,6 +127,7 @@ use core::ops::{Deref, DerefMut};
 // - https://github.com/torvalds/linux/blob/3516bd729358a2a9b090c1905bd2a3fa926e24c6/arch/sparc/include/asm/cache.h#L19
 //
 // All others are assumed to have 64-byte cache line size.
+#[cfg_attr(target_arch = "wasm", repr(align(64)))]
 #[cfg_attr(
     not(any(
         target_arch = "x86_64",
@@ -141,6 +142,7 @@ use core::ops::{Deref, DerefMut};
         target_arch = "hexagon",
         target_arch = "m68k",
         target_arch = "s390x",
+        target_arch = "wasm",
     )),
     repr(align(64))
 )]
