@@ -471,7 +471,7 @@ where
 
     /// Finds an entry with the specified key, or inserts a new `key`-`value` pair if none exist.
     pub fn get_or_insert(&self, key: K, value: V, guard: &Guard) -> RefEntry<'_, K, V> {
-        self.insert_internal(key, || value, false, guard)
+        self.insert_internal(key, || value, |_| false, guard)
     }
 
     /// Finds an entry with the specified key, or inserts a new `key`-`value` pair if none exist,
@@ -486,7 +486,7 @@ where
     where
         F: FnOnce() -> V,
     {
-        self.insert_internal(key, value, false, guard)
+        self.insert_internal(key, value, |_| false, guard)
     }
 
     /// Returns an iterator over all entries in the skip list.
@@ -846,15 +846,16 @@ where
     /// Inserts an entry with the specified `key` and `value`.
     ///
     /// If `replace` is `true`, then any existing entry with this key will first be removed.
-    fn insert_internal<F>(
+    fn insert_internal<F, CompareF>(
         &self,
         key: K,
         value: F,
-        replace: bool,
+        replace: CompareF,
         guard: &Guard,
     ) -> RefEntry<'_, K, V>
     where
         F: FnOnce() -> V,
+        CompareF: Fn(&V) -> bool,
     {
         self.check_guard(guard);
 
@@ -874,7 +875,7 @@ where
                     Some(r) => r,
                     None => break,
                 };
-
+                let replace = replace(&r.value);
                 if replace {
                     // If a node with the key was found and we should replace it, mark its tower
                     // and then repeat the search.
@@ -896,7 +897,6 @@ where
 
             // create value before creating node, so extra allocation doesn't happen if value() function panics
             let value = value();
-
             // Create a new node.
             let height = self.random_height();
             let (node, n) = {
@@ -945,6 +945,7 @@ where
                 }
 
                 if let Some(r) = search.found {
+                    let replace = replace(&r.value);
                     if replace {
                         // If a node with the key was found and we should replace it, mark its
                         // tower and then repeat the search.
@@ -1082,7 +1083,25 @@ where
     /// If there is an existing entry with this key, it will be removed before inserting the new
     /// one.
     pub fn insert(&self, key: K, value: V, guard: &Guard) -> RefEntry<'_, K, V> {
-        self.insert_internal(key, || value, true, guard)
+        self.insert_internal(key, || value, |_| true, guard)
+    }
+
+    /// Inserts a `key`-`value` pair into the skip list and returns the new entry.
+    ///
+    /// If there is an existing entry with this key and compare(entry.value) returns true,
+    /// it will be removed before inserting the new one.
+    /// The closure will not be called if the key is not present.
+    pub fn compare_insert<F>(
+        &self,
+        key: K,
+        value: V,
+        compare_fn: F,
+        guard: &Guard,
+    ) -> RefEntry<'_, K, V>
+    where
+        F: Fn(&V) -> bool,
+    {
+        self.insert_internal(key, || value, compare_fn, guard)
     }
 
     /// Removes an entry with the specified `key` from the map and returns it.
@@ -1768,10 +1787,10 @@ impl<'a, K: 'a, V: 'a> RefIter<'a, K, V> {
     /// Decrements the reference count of `RefEntry` owned by the iterator.
     pub fn drop_impl(&mut self, guard: &Guard) {
         self.parent.check_guard(guard);
-        if let Some(e) = mem::replace(&mut self.head, None) {
+        if let Some(e) = self.head.take() {
             unsafe { e.node.decrement(guard) };
         }
-        if let Some(e) = mem::replace(&mut self.tail, None) {
+        if let Some(e) = self.tail.take() {
             unsafe { e.node.decrement(guard) };
         }
     }
@@ -1985,10 +2004,10 @@ where
     /// Decrements a reference count owned by this iterator.
     pub fn drop_impl(&mut self, guard: &Guard) {
         self.parent.check_guard(guard);
-        if let Some(e) = mem::replace(&mut self.head, None) {
+        if let Some(e) = self.head.take() {
             unsafe { e.node.decrement(guard) };
         }
-        if let Some(e) = mem::replace(&mut self.tail, None) {
+        if let Some(e) = self.tail.take() {
             unsafe { e.node.decrement(guard) };
         }
     }

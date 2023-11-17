@@ -1,7 +1,7 @@
 //! Tests for the `select!` macro.
 
 #![forbid(unsafe_code)] // select! is safe.
-#![allow(clippy::drop_copy, clippy::match_single_binding)]
+#![allow(clippy::match_single_binding)]
 
 use std::any::Any;
 use std::cell::Cell;
@@ -464,7 +464,7 @@ fn panic_sender() {
         panic!("send panicked")
     }
 
-    #[allow(unreachable_code)]
+    #[allow(unreachable_code, clippy::diverging_sub_expression)]
     {
         select! {
             send(get(), panic!()) -> _ => {}
@@ -943,7 +943,7 @@ fn fairness_send() {
     assert!(hits.iter().all(|x| *x >= COUNT / 4));
 }
 
-#[allow(clippy::or_fun_call)] // This is intentional.
+#[allow(clippy::or_fun_call, clippy::unnecessary_literal_unwrap)] // This is intentional.
 #[test]
 fn references() {
     let (s, r) = unbounded::<i32>();
@@ -965,6 +965,7 @@ fn references() {
     }
 }
 
+#[allow(clippy::never_loop)] // This is intentional.
 #[test]
 fn case_blocks() {
     let (s, r) = unbounded::<i32>();
@@ -1212,32 +1213,32 @@ fn result_types() {
     let (_, r) = bounded::<i32>(0);
 
     select! {
-        recv(r) -> res => drop::<Result<i32, RecvError>>(res),
+        recv(r) -> res => { let _: Result<i32, RecvError> = res; },
     }
     select! {
-        recv(r) -> res => drop::<Result<i32, RecvError>>(res),
+        recv(r) -> res =>  { let _: Result<i32, RecvError> = res; },
         default => {}
     }
     select! {
-        recv(r) -> res => drop::<Result<i32, RecvError>>(res),
+        recv(r) -> res =>  { let _: Result<i32, RecvError> = res; },
         default(ms(0)) => {}
     }
 
     select! {
-        send(s, 0) -> res => drop::<Result<(), SendError<i32>>>(res),
+        send(s, 0) -> res => { let _: Result<(), SendError<i32>> = res; },
     }
     select! {
-        send(s, 0) -> res => drop::<Result<(), SendError<i32>>>(res),
+        send(s, 0) -> res =>  { let _: Result<(), SendError<i32>> = res; },
         default => {}
     }
     select! {
-        send(s, 0) -> res => drop::<Result<(), SendError<i32>>>(res),
+        send(s, 0) -> res =>  { let _: Result<(), SendError<i32>> = res; },
         default(ms(0)) => {}
     }
 
     select! {
-        send(s, 0) -> res => drop::<Result<(), SendError<i32>>>(res),
-        recv(r) -> res => drop::<Result<i32, RecvError>>(res),
+        send(s, 0) -> res =>  { let _: Result<(), SendError<i32>> = res; },
+        recv(r) -> res => { let _: Result<i32, RecvError> = res; },
     }
 }
 

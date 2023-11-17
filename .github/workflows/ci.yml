@@ -7,7 +7,7 @@ on:
   pull_request:
   push:
     branches:
-      - staging
+      - master
   schedule:
     - cron: '0 1 * * *'
 
@@ -38,11 +38,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # aarch64/x86_64 macOS and aarch64/arm linux are tested on Cirrus CI
+        # aarch64/x86_64 macOS and aarch64 Linux are tested on Cirrus CI
         include:
-          - rust: '1.38'
+          - rust: '1.61'
             os: ubuntu-latest
-          - rust: '1.38'
+          - rust: '1.61'
             os: windows-latest
           - rust: stable
             os: ubuntu-latest
@@ -55,13 +55,16 @@ jobs:
           - rust: nightly
             os: ubuntu-latest
             target: i686-unknown-linux-gnu
+          - rust: nightly
+            os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
           # Test 32-bit target that does not have AtomicU64/AtomicI64.
           - rust: nightly
             os: ubuntu-latest
-            target: mips-unknown-linux-gnu
+            target: armv5te-unknown-linux-gnueabi
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         # --no-self-update is necessary because the windows environment cannot self-update rustup.exe.
         run: rustup update ${{ matrix.rust }} --no-self-update && rustup default ${{ matrix.rust }}
@@ -80,11 +83,11 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - '1.38'
+          - '1.61'
           - nightly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
       - name: Install cargo-hack
@@ -96,7 +99,7 @@ jobs:
   dependencies:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update nightly && rustup default nightly
       - name: Install cargo-hack
@@ -113,7 +116,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update nightly && rustup default nightly
       - run: ci/no_atomic.sh
@@ -146,7 +149,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update stable
       - name: rustfmt
@@ -156,7 +159,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update stable
       - name: clippy
@@ -166,7 +169,7 @@ jobs:
   miri:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup toolchain install nightly --component miri && rustup default nightly
       - name: miri
@@ -176,13 +179,10 @@ jobs:
   careful:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup toolchain install nightly --component rust-src && rustup default nightly
-      - name: Install cargo-careful
-        uses: taiki-e/cache-cargo-install-action@v1
-        with:
-          tool: cargo-careful
+      - uses: taiki-e/install-action@cargo-careful
       - name: Run cargo-careful
         run: ./ci/careful.sh
 
@@ -190,7 +190,7 @@ jobs:
   san:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update nightly && rustup default nightly
       - name: Run sanitizers
@@ -200,7 +200,7 @@ jobs:
   loom:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update stable
       - name: loom
@@ -210,7 +210,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: rustup update nightly && rustup default nightly
       - name: docs
@@ -219,34 +219,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install shellcheck
         uses: taiki-e/install-action@shellcheck
       - run: shellcheck $(git ls-files '*.sh')
-
-  # This job doesn't actually test anything, but they're used to tell bors the
-  # build completed, as there is no practical way to detect when a workflow is
-  # successful listening to webhooks only.
-  #
-  # ALL THE PREVIOUS JOBS NEEDS TO BE ADDED TO THE `needs` SECTION OF THIS JOB!
-
-  ci-success:
-    name: ci
-    if: github.event_name == 'push' && success()
-    needs:
-      - test
-      - features
-      - dependencies
-      - codegen
-      - rustfmt
-      - clippy
-      - miri
-      - careful
-      - san
-      - loom
-      - docs
-      - shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mark the job as a success
-        run: exit 0
